@@ -1,0 +1,5 @@
+yolo11x.pt
+
+datasets
+*.pt
+*.pth
