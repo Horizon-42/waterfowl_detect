@@ -2,7 +2,7 @@ from ultralytics import YOLO
 import cv2
 import torch
 import os
-
+import shutil
 
 def get_last_run_directory(base_dir='runs/detect'):
     import re
@@ -22,7 +22,6 @@ def train_yolo(data_yaml, model_path='yolov8n.pt', epochs=50, imgsz=640):
                 device=device, batch=4, resume=True)
     # move the best model to 'trained.pt'
 
-    import shutil
     latest_run = get_last_run_directory()
     best_model_path = os.path.join(latest_run, 'weights', 'best.pt')
     print(f"Latest run directory: {latest_run}")
@@ -65,17 +64,23 @@ def validate_yolo(model_path, imgsz=640):
     draw_loss_png(os.path.join(train_dir, 'results.csv'),
                   output_path=os.path.join(train_dir, 'results.png'))
 
+    # move model
+    best_model_path = os.path.join(train_dir, 'weights', 'best.pt')
+    print(f"Latest run directory: {train_dir}")
+    shutil.copy(best_model_path, 'trained.pt')
 
 if __name__ == "__main__":
     data_yaml = 'data.yaml'  # path to your data.yaml file
 
     # select trian and val mode
     # read parameter from command line or set manually
-    mode = input("Enter mode (train/val): ").strip().lower()
+    mode = input("Enter mode (train/val/test): ").strip().lower()
     if mode == 'val':
         latest_run = get_last_run_directory()
         model_path = os.path.join(latest_run, 'weights', 'best.pt')
         validate_yolo(model_path=model_path, imgsz=1024)
-    else:
+    elif mode == 'train':
         train_yolo(data_yaml, model_path='runs/detect/train12/weights/best.pt',
                    epochs=350, imgsz=1024)
+    else:
+        print("Invalid mode. Please enter 'train' or 'val'.")
