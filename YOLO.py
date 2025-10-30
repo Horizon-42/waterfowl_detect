@@ -20,7 +20,7 @@ def train_yolo(data_yaml, model_path='yolov8n.pt', epochs=50, imgsz=640):
 
     model = YOLO(model_path)
     model.train(data=data_yaml, epochs=epochs, imgsz=imgsz,
-                device=device, batch=4, resume=True)
+                device=device, batch=4)
     # move the best model to 'trained.pt'
 
     latest_run = get_last_run_directory()
@@ -74,7 +74,11 @@ def validate_yolo(model_path, imgsz=640):
 def test_yolo(model_path, test_images, imgsz=640):
     model = YOLO(model_path)
     results = model.predict(
-        source=test_images, conf=0.25, save=True)
+        source=test_images, conf=0.25, imgsz=imgsz,
+        tile=True,         # Automatically tile large images
+        overlap=0.2,       # 20% overlap to avoid edge cut-offs
+        save=True           # Save tiled results + merged output
+    )
     print("Test results saved in 'runs/detect/predict' directory.")
 
 if __name__ == "__main__":
@@ -88,8 +92,8 @@ if __name__ == "__main__":
     parser.add_argument('--mode', type=str, choices=['train', 'val', 'test'], required=False,
                         help='Mode to run: train, val, or test')
     parser.add_argument('--pretrained_model', type=str, required=False,
-                        help='Path to pretrained model (default: yolov11x.pt)',
-                        default='yolov11x.pt')
+                        help='Path to pretrained model (default: yolo11x.pt)',
+                        default='yolo11x.pt')
     parser.add_argument('--test_images', type=str, required=False,
                         help='Path to test images (required if mode is test)',
                         default="datasets/46k66mz9sz-2/00_UAV-derived Thermal Waterfowl Dataset/00_UAV-derived Waterfowl Thermal Imagery Dataset/01_Thermal Images and Ground Truth (used for detector training and testing)/03_Negative Images")
@@ -101,7 +105,7 @@ if __name__ == "__main__":
 
     if mode == 'train':
         train_yolo(data_yaml, model_path=args.pretrained_model,
-                   epochs=350, imgsz=1024)
+                   epochs=350, imgsz=640)
     elif mode == 'val':
         validate_yolo(model_path=model_path, imgsz=1024)
     else:
