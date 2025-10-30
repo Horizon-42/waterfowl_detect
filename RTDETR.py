@@ -5,7 +5,7 @@ import os
 import shutil
 import argparse
 
-from utils import get_last_run_directory, predict_with_tiles, draw_loss_png
+from utils import get_last_run_directory, draw_loss_png
 
 
 
@@ -109,7 +109,7 @@ def test_rtdetr(model_path, test_images, imgsz=640, tile_size=640):
     else:
         if os.path.isdir(test_images):
             image_files = [os.path.join(test_images, f) for f in sorted(os.listdir(test_images))
-                           if f.lower().endswith(('.tif', '.tiff', '.png', '.jpg', '.jpeg'))]
+                           if f.lower().endswith(('.tif', '.tiff'))]
             for image_file in image_files:
                 predict_with_tiles(model, image_file,
                                    tile_size=tile_size, overlap=0.2, imgsz=imgsz, conf=0.25)
