@@ -3,6 +3,7 @@ import cv2
 import torch
 import os
 import shutil
+import argparse
 
 def get_last_run_directory(base_dir='runs/detect'):
     import re
@@ -69,18 +70,40 @@ def validate_yolo(model_path, imgsz=640):
     print(f"Latest run directory: {train_dir}")
     shutil.copy(best_model_path, 'trained.pt')
 
+
+def test_yolo(model_path, test_images, imgsz=640):
+    model = YOLO(model_path)
+    results = model.predict(
+        source=test_images, conf=0.25, save=True)
+    print("Test results saved in 'runs/detect/predict' directory.")
+
 if __name__ == "__main__":
     data_yaml = 'data.yaml'  # path to your data.yaml file
 
-    # select trian and val mode
-    # read parameter from command line or set manually
-    mode = input("Enter mode (train/val/test): ").strip().lower()
-    if mode == 'val':
-        latest_run = get_last_run_directory()
-        model_path = os.path.join(latest_run, 'weights', 'best.pt')
-        validate_yolo(model_path=model_path, imgsz=1024)
-    elif mode == 'train':
-        train_yolo(data_yaml, model_path='runs/detect/train12/weights/best.pt',
+    # read argument from command line
+    # mode = ['train', 'val', 'test']
+    # --test_images path/to/images
+    parser = argparse.ArgumentParser(
+        description='YOLO Training and Validation')
+    parser.add_argument('--mode', type=str, choices=['train', 'val', 'test'], required=False,
+                        help='Mode to run: train, val, or test')
+    parser.add_argument('--pretrained_model', type=str, required=False,
+                        help='Path to pretrained model (default: yolov11x.pt)',
+                        default='yolov11x.pt')
+    parser.add_argument('--test_images', type=str, required=False,
+                        help='Path to test images (required if mode is test)',
+                        default="datasets/46k66mz9sz-2/00_UAV-derived Thermal Waterfowl Dataset/00_UAV-derived Waterfowl Thermal Imagery Dataset/01_Thermal Images and Ground Truth (used for detector training and testing)/03_Negative Images")
+    args = parser.parse_args()
+    mode = args.mode
+
+    latest_run = get_last_run_directory()
+    model_path = os.path.join(latest_run, 'weights', 'best.pt')
+
+    if mode == 'train':
+        train_yolo(data_yaml, model_path=args.pretrained_model,
                    epochs=350, imgsz=1024)
+    elif mode == 'val':
+        validate_yolo(model_path=model_path, imgsz=1024)
     else:
-        print("Invalid mode. Please enter 'train' or 'val'.")
+        test_yolo(model_path=model_path,
+                  test_images=args.test_images)

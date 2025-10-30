@@ -5,3 +5,5 @@ datasets
 *.pth
 
 val*
+
+predict*
