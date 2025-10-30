@@ -15,7 +15,7 @@ def train_rtdetr(data_yaml, model_path='rtdetr-l.pt', epochs=50, imgsz=640, batc
 
     model = RTDETR(model_path)
     model.train(data=data_yaml, epochs=epochs, imgsz=imgsz,
-                device=device, batch=batch)
+                device=device, batch=batch, patience=50)
 
     latest_run = get_last_run_directory()
     best_model_path = os.path.join(latest_run, 'weights', 'best.pt')
@@ -128,11 +128,11 @@ if __name__ == "__main__":
     parser.add_argument('--test_images', type=str, required=False,
                         help='Path to test images (required if mode is test)',
                         default="datasets/46k66mz9sz-2/00_UAV-derived Thermal Waterfowl Dataset/00_UAV-derived Waterfowl Thermal Imagery Dataset/01_Thermal Images and Ground Truth (used for detector training and testing)/03_Negative Images")
-    parser.add_argument('--epochs', type=int, default=350,
+    parser.add_argument('--epochs', type=int, default=250,
                         help='Number of epochs for training (default: 350)')
-    parser.add_argument('--imgsz', type=int, default=640,
+    parser.add_argument('--imgsz', type=int, default=512,
                         help='Image size for training/validation (default: 640)')
-    parser.add_argument('--batch', type=int, default=4,
+    parser.add_argument('--batch', type=int, default=6,
                         help='Batch size (default: 4)')
     args = parser.parse_args()
     mode = args.mode
