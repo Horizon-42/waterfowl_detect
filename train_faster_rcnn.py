@@ -188,10 +188,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=20)
 
         optimizer.zero_grad()
         losses.backward()
-        # q: what does this do?
-        # a: It clips the gradients of the model parameters to a maximum norm of 10.0.
-        # q: why?
-        # a: Clipping gradients helps prevent the exploding gradient problem, which can destabilize training
+        # Prevent exploding gradients when large tiles or boxes spike the loss.
         torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
         optimizer.step()
 
@@ -361,6 +358,8 @@ if __name__ == "__main__":
     parser.add_argument("--print_freq", type=int, default=20, help="Logging frequency per epoch")
     parser.add_argument("--hflip", type=float, default=0.5, help="Horizontal flip probability for training")
     parser.add_argument("--output_dir", type=str, default="runs/fasterrcnn", help="Directory to store checkpoints")
+    parser.add_argument("--checkpoint_interval", type=int, default=10,
+                        help="How often (in epochs) to write checkpoints")
     parser.add_argument("--no_pretrained", action="store_true", help="Disable ImageNet-pretrained backbone")
     args = parser.parse_args()
 
