@@ -137,6 +137,7 @@ class YoloDetectionDataset(Dataset):
                 tensor = tensor.permute(2, 0, 1)
         else:
             with Image.open(path) as img:
+                # grayscale images are converted to RGB
                 img = img.convert("RGB")
                 tensor = F.to_tensor(img)
         return tensor.contiguous()
@@ -205,6 +206,10 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=20)
 def evaluate_loss(model, data_loader, device):
     """Compute average loss terms on the validation loader without gradients."""
     was_training = model.training
+
+    with torch.no_grad():
+        pass
+
     model.train()
     totals = defaultdict(float)
     count = 0
@@ -297,6 +302,7 @@ def main(args):
     model.to(device)
 
     params = [p for p in model.parameters() if p.requires_grad]
+    torch.optim.AdamW()
     optimizer = torch.optim.SGD(params, lr=args.lr, momentum=0.9, weight_decay=1e-4)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_gamma)
 
