@@ -1,5 +1,6 @@
 # Theoretical Deep Metric Learning
 ## Task 1
+### 1.1
 Loss Function:
 $$
 L = max(0, d(a, p) - d(a, n) + m)
@@ -25,3 +26,11 @@ $$
 d(x,y) = d(x, x') + m - L'
 $$
 we know $d(x, x') > 0$, and the training process try to reduce L' to 0, so if we set bigger m, we will get bigger inter-class distance.
+
+To make $\mathbb{E}{L} = 0$, we need $\mathbb{E}{L'}<=0$
+$$
+d(a, p) - d(a, n) + m <= 0 \\
+\Rightarrow d(a, n) - d(a, p) >= m
+$$
+That means the average inter-class distance must be bigger then inner-class distance plus margin value m.
+### 1.2
