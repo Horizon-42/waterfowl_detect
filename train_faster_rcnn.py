@@ -188,9 +188,8 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=20)
 @torch.inference_mode()
 def evaluate_loss(model, data_loader, device):
     """Compute average loss terms on the validation loader without gradients."""
-
-
-    model.eval()
+    was_training = model.training
+    model.train()
     totals = defaultdict(float)
     count = 0
     for images, targets in data_loader:
@@ -202,6 +201,8 @@ def evaluate_loss(model, data_loader, device):
             count += batch_size
             for k, v in loss_dict.items():
                 totals[k] += v.item() * batch_size
+    if not was_training:
+        model.eval()
     if count == 0:
         return {}
     return {k: v / count for k, v in totals.items()}
@@ -254,6 +255,8 @@ def main(args):
                 args.output_dir = new_output_dir
                 break
             suffix += 1
+    # create output directory
+    os.makedirs(args.output_dir)
 
     loss_rows = []
 
@@ -294,7 +297,8 @@ def main(args):
     model.to(device)
 
     params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.AdamW(params, lr=args.lr, momentum=0.9, weight_decay=1e-4)
+    # wait decay, to prevent overfitting, L2 regularization
+    optimizer = torch.optim.AdamW(params, lr=args.lr, weight_decay=1e-4)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_gamma)
 
     best_val = float("inf")
