@@ -346,8 +346,6 @@ def main(args):
     # create output directory
     os.makedirs(args.output_dir)
 
-    loss_rows = []
-
     train_images, val_images, class_count = load_dataset_paths(args.data_yaml)
 
     # Only add simple augmentation so the evaluation distribution remains clean.
@@ -389,6 +387,10 @@ def main(args):
     optimizer = torch.optim.AdamW(params, lr=args.lr, weight_decay=1e-4)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_gamma)
 
+    # loss and metrics tracking
+    loss_rows = []
+    metrics = []
+
     best_val = float("inf")
     for epoch in range(1, args.epochs + 1):
         train_one_epoch(model, optimizer, train_loader, device, epoch, print_freq=args.print_freq)
@@ -403,6 +405,13 @@ def main(args):
             row = {"epoch": epoch, "val_loss": val_loss}
             row.update({f"val_{k}": v for k, v in val_metrics.items()})
             loss_rows.append(row)
+
+            obd_metrics = evaluate_metrics(model, val_loader, device)
+            obd_metrics_str = ", ".join(f"{k}: {v:.4f}" for k, v in obd_metrics.items()) if obd_metrics else "n/a"
+            print(f"Validation epoch {epoch} detection metrics: {obd_metrics_str}")
+            obd_row = {f"epoch": epoch}
+            obd_row.update({f"val_{k}": v for k, v in obd_metrics.items()})
+            metrics.append(obd_row)
 
             if val_loss < best_val:
                 best_val = val_loss
@@ -443,6 +452,14 @@ def main(args):
         csv_path = os.path.join(args.output_dir, "training_log.csv")
         df.to_csv(csv_path, index=False)
         print(f"Saved training log: {csv_path}")
+
+    # save metrics
+    if metrics:
+        df = pd.DataFrame(metrics)
+        csv_path = os.path.join(args.output_dir, "detection_metrics.csv")
+        df.to_csv(csv_path, index=False)
+        print(f"Saved detection metrics log: {csv_path}")
+
 
 
 if __name__ == "__main__":
