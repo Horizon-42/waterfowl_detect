@@ -15,7 +15,7 @@ import torch
 import yaml
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
-from torchvision.models.detection import fasterrcnn_resnet50_fpn
+from torchvision.models.detection import fasterrcnn_resnet50_fpn, fasterrcnn_resnet50_fpn_v2
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.transforms import functional as F
 import pandas as pd
@@ -155,7 +155,7 @@ def collate_fn(batch):
 
 def create_model(num_classes, pretrained=True):
     """Instantiate a Faster R-CNN model with the requested number of classes."""
-    model = fasterrcnn_resnet50_fpn(weights="DEFAULT" if pretrained else None)
+    model = fasterrcnn_resnet50_fpn_v2(weights="DEFAULT" if pretrained else None)
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     return model
@@ -216,68 +216,72 @@ def evaluate_metrics(model, data_loader, device, iou_threshold=0.5):
     This is a simplified implementation, only consider 1 class.
     """
     model.eval()
-    all_gt_boxes = []
-    all_pred_boxes = []
-    all_pred_scores = []
-    all_pred_labels = []
-
-    with torch.no_grad():
-        for images, targets in data_loader:
-            images = [img.to(device) for img in images]
-            outputs = model(images)
-
-            # separate ground truth and predictions
-            for target in targets:
-                gt_boxes = target["boxes"].cpu().numpy()
-                all_gt_boxes.extend(gt_boxes)
-
-            for output in outputs:
-                pred_boxes = output["boxes"].cpu().numpy()
-                pred_scores = output["scores"].cpu().numpy()
-                pred_labels = output["labels"].cpu().numpy()
-
-                all_pred_boxes.extend(pred_boxes)
-                all_pred_scores.extend(pred_scores)
-                all_pred_labels.extend(pred_labels)
-
-    # check if all the labels are zero (single class)
-    if not all(label == 1 for label in all_pred_labels):
-        raise NotImplementedError("This evaluation function currently supports only single-class detection.")
-    
-    # sort predictions by scores in descending order
-    sorted_indices = np.argsort(np.array(all_pred_scores), order='descending')
-    all_pred_boxes = [all_pred_boxes[i] for i in sorted_indices]
-    all_pred_scores = [all_pred_scores[i] for i in sorted_indices]
-    all_pred_labels = [all_pred_labels[i] for i in sorted_indices]
-
-
-    # Compute metrics here (this is a placeholder; actual implementation may vary)
-    matched_gt = set()
-    TP = 0
-    FP = 0
 
     def iou(boxA, boxB):
+        """
+        Compute Intersection over Union between two boxes, in continuous XYXY format.
+        """
+        # intersection
         xA = max(boxA[0], boxB[0])
         yA = max(boxA[1], boxB[1])
         xB = min(boxA[2], boxB[2])
         yB = min(boxA[3], boxB[3])
 
-        interArea = max(0, xB - xA + 1) * max(0, yB - yA + 1)
-        boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
-        boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
+        inter_w = max(0, xB - xA)
+        inter_h = max(0, yB - yA)
+        inter_area = inter_w * inter_h
 
-        iou = interArea / float(boxAArea + boxBArea - interArea)
-        return iou
+        areaA = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+        areaB = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
 
-    for pb in all_pred_boxes:
-        ious = [iou(pb, gb) for gb in all_gt_boxes]
-        max_iou = max(ious) if ious else 0
-        if max_iou >= iou_threshold and ious.index(max_iou) not in matched_gt:
-            TP += 1
-            matched_gt.add(ious.index(max_iou))
-        else:
-            FP += 1
-    FN = len(all_gt_boxes) - len(matched_gt)
+        union = areaA + areaB - inter_area
+        if union <= 0:
+            return 0.0
+        return inter_area / union
+
+    TP = 0
+    FP = 0
+    FN = 0
+    with torch.no_grad():
+        for images, targets in data_loader:
+            images = [img.to(device) for img in images]
+            outputs = model(images)
+
+            # iterate for every image in the batch
+            for output, target in zip(outputs, targets):
+                gt_boxes = target["boxes"].cpu().numpy()
+                gt_num = len(gt_boxes)
+                pred_boxes = output["boxes"].cpu().numpy()
+                pred_scores = output["scores"].cpu().numpy()
+
+                if gt_num == 0:
+                    FP += len(pred_boxes)
+                    continue
+                if len(pred_boxes) == 0:
+                    FN += len(gt_boxes)
+                    continue
+                
+                # convert gt_boxes to set for matching
+                gt_boxes = list(gt_boxes)
+                # sort predictions by scores in descending order
+                sorted_indices = np.argsort(-pred_scores)
+                pred_boxes = [pred_boxes[i] for i in sorted_indices]
+                pred_scores = [pred_scores[i] for i in sorted_indices]
+
+                for pb in pred_boxes:
+                    if len(gt_boxes) == 0:
+                        FP += 1
+                        continue
+                    ious = [iou(pb, gb) for gb in gt_boxes]
+                    # get max iou and its index
+                    max_idx = np.argmax(ious)
+                    max_iou = ious[max_idx]
+                    if max_iou >= iou_threshold:
+                        TP += 1
+                        gt_boxes.pop(max_idx)
+                    else:
+                        FP += 1
+                FN += len(gt_boxes)
 
     # calculate precision, recall, F1
     precision = TP/(TP + FP) if (TP + FP) > 0 else 0.0
