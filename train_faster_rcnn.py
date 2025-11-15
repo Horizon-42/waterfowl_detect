@@ -34,7 +34,7 @@ class YoloDetectionDataset(Dataset):
         if not os.path.isdir(self.labels_dir):
             raise FileNotFoundError(f"Labels directory not found: {self.labels_dir}")
 
-        exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".npy"}
+        exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
         self.samples = []
         for file_name in sorted(os.listdir(self.images_dir)):
             if os.path.splitext(file_name)[1].lower() not in exts:
@@ -119,27 +119,10 @@ class YoloDetectionDataset(Dataset):
     @staticmethod
     def _load_image(path):
         """Read image or numpy array and return a contiguous CHW float tensor in [0,1]."""
-        ext = os.path.splitext(path)[1].lower()
-        if ext == ".npy":
-            array = np.load(path)
-            if array.ndim == 2:
-                array = np.stack([array] * 3, axis=-1)
-            elif array.ndim == 3 and array.shape[0] in (1, 3) and array.shape[-1] not in (1, 3):
-                array = np.moveaxis(array, 0, -1)
-            if array.shape[-1] == 1:
-                array = np.repeat(array, repeats=3, axis=-1)
-            tensor = torch.from_numpy(array).float()
-            if tensor.max() > 1.0:
-                tensor /= 255.0
-            if tensor.ndim == 2:
-                tensor = tensor.unsqueeze(0)
-            elif tensor.shape[-1] in (1, 3):
-                tensor = tensor.permute(2, 0, 1)
-        else:
-            with Image.open(path) as img:
-                # grayscale images are converted to RGB
-                img = img.convert("RGB")
-                tensor = F.to_tensor(img)
+        with Image.open(path) as img:
+            # grayscale images are converted to RGB
+            img = img.convert("RGB")
+            tensor = F.to_tensor(img)
         return tensor.contiguous()
 
 
@@ -184,10 +167,10 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=20)
         images = [img.to(device) for img in images]
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
+        optimizer.zero_grad()
+
         loss_dict = model(images, targets)
         losses = sum(loss for loss in loss_dict.values())
-
-        optimizer.zero_grad()
         losses.backward()
         # Prevent exploding gradients when large tiles or boxes spike the loss.
         torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
@@ -205,24 +188,20 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=20)
 @torch.inference_mode()
 def evaluate_loss(model, data_loader, device):
     """Compute average loss terms on the validation loader without gradients."""
-    was_training = model.training
 
-    with torch.no_grad():
-        pass
 
-    model.train()
+    model.eval()
     totals = defaultdict(float)
     count = 0
     for images, targets in data_loader:
         images = [img.to(device) for img in images]
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-        loss_dict = model(images, targets)
-        batch_size = len(images)
-        count += batch_size
-        for k, v in loss_dict.items():
-            totals[k] += v.item() * batch_size
-    if not was_training:
-        model.eval()
+        with torch.no_grad():
+            loss_dict = model(images, targets)
+            batch_size = len(images)
+            count += batch_size
+            for k, v in loss_dict.items():
+                totals[k] += v.item() * batch_size
     if count == 0:
         return {}
     return {k: v / count for k, v in totals.items()}
