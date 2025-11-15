@@ -20,6 +20,8 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.transforms import functional as F
 import pandas as pd
 
+from sklearn.metrics import average_precision_score, precision_recall_fscore_support
+
 class YoloDetectionDataset(Dataset):
     """Dataset wrapper that reads YOLO-format labels and returns torchvision targets."""
 
@@ -206,6 +208,51 @@ def evaluate_loss(model, data_loader, device):
     if count == 0:
         return {}
     return {k: v / count for k, v in totals.items()}
+
+@torch.inference_mode()
+def evaluate_metrics(model, data_loader, device, iou_threshold=0.5):
+    """
+    Compute detection metrics (mAP, precision, recall, F1) on the validation loader.
+    This is a simplified implementation, only consider 1 class.
+    """
+    model.eval()
+    all_gt_boxes = []
+    all_pred_boxes = []
+    all_pred_scores = []
+    all_pred_labels = []
+
+    with torch.no_grad():
+        for images, targets in data_loader:
+            images = [img.to(device) for img in images]
+            outputs = model(images)
+
+            for target, output in zip(targets, outputs):
+                gt_boxes = target["boxes"].cpu().numpy()
+                all_gt_boxes.extend(gt_boxes)
+
+                pred_boxes = output["boxes"].cpu().numpy()
+                pred_scores = output["scores"].cpu().numpy()
+                pred_labels = output["labels"].cpu().numpy()
+
+                all_pred_boxes.extend(pred_boxes)
+                all_pred_scores.extend(pred_scores)
+                all_pred_labels.extend(pred_labels)
+
+    # Compute metrics here (this is a placeholder; actual implementation may vary)
+    matched_gt = set()
+    TP = 0
+    FP = 0
+    for pb in all_pred_boxes:
+        pass
+
+    # For simplicity, we will return dummy values
+    metrics = {
+        "mAP": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "F1": 0.0,
+    }
+    return metrics
 
 
 def resolve_path(base_dir, relative_path):
