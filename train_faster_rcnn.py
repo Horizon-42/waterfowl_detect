@@ -294,8 +294,7 @@ def main(args):
     model.to(device)
 
     params = [p for p in model.parameters() if p.requires_grad]
-    torch.optim.AdamW()
-    optimizer = torch.optim.SGD(params, lr=args.lr, momentum=0.9, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(params, lr=args.lr, momentum=0.9, weight_decay=1e-4)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_gamma)
 
     best_val = float("inf")
