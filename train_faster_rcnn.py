@@ -146,24 +146,6 @@ class YoloDetectionDataset(Dataset):
         return tensor.contiguous()
 
 
-class RandomHorizontalFlip:
-    """Lightweight transform that mirrors images and their boxes with given probability."""
-
-    def __init__(self, probability=0.5):
-        self.probability = probability
-
-    def __call__(self, image, target):
-        if random.random() < self.probability and target["boxes"].shape[0] > 0:
-            _, _, width = image.shape
-            image = F.hflip(image)
-            boxes = target["boxes"]
-            x_min = width - boxes[:, 2]
-            x_max = width - boxes[:, 0]
-            boxes[:, 0] = x_min
-            boxes[:, 2] = x_max
-            target["boxes"] = boxes
-        return image, target
-
 
 def collate_fn(batch):
     """Custom collate function to keep images and targets in list form."""
@@ -392,11 +374,13 @@ def main(args):
             brightness_limit=0.02, contrast_limit=0.02, p=0.5),  # small
         A.GaussNoise(p=0.4),
         # custom: gain/offset jitter (implement as lambda if needed)
-        A.Normalize(mean=0.0, std=1.0, max_pixel_value=255.0),
+        A.Normalize(mean=0.0, std=1.0, max_pixel_value=1.0),
         ToTensorV2()
     ], bbox_params=A.BboxParams(format='pascal_voc', label_fields=['labels']))
 
-    val_transforms = None
+    val_transforms = A.Compose(
+        [A.Normalize(mean=0.0, std=1.0, max_pixel_value=1.0), ToTensorV2()]
+    )
 
     train_dataset = YoloDetectionDataset(
         train_images, class_count, transforms=train_transforms)
