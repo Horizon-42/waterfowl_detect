@@ -20,7 +20,9 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.transforms import functional as F
 import pandas as pd
 
-from sklearn.metrics import average_precision_score, precision_recall_fscore_support
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+
 
 class YoloDetectionDataset(Dataset):
     """Dataset wrapper that reads YOLO-format labels and returns torchvision targets."""
@@ -32,9 +34,11 @@ class YoloDetectionDataset(Dataset):
         self.transforms = transforms
 
         if not os.path.isdir(self.images_dir):
-            raise FileNotFoundError(f"Images directory not found: {self.images_dir}")
+            raise FileNotFoundError(
+                f"Images directory not found: {self.images_dir}")
         if not os.path.isdir(self.labels_dir):
-            raise FileNotFoundError(f"Labels directory not found: {self.labels_dir}")
+            raise FileNotFoundError(
+                f"Labels directory not found: {self.labels_dir}")
 
         exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
         self.samples = []
@@ -42,7 +46,8 @@ class YoloDetectionDataset(Dataset):
             if os.path.splitext(file_name)[1].lower() not in exts:
                 continue
             image_path = os.path.join(self.images_dir, file_name)
-            label_path = os.path.join(self.labels_dir, os.path.splitext(file_name)[0] + ".txt")
+            label_path = os.path.join(
+                self.labels_dir, os.path.splitext(file_name)[0] + ".txt")
             self.samples.append((image_path, label_path))
 
         if not self.samples:
@@ -53,7 +58,7 @@ class YoloDetectionDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        """Load a sample and convert YOLO boxes to absolute XYXY tensors."""
+        """Load a sample and convert YOLO boxes to absolute XYXY tensors. Supports Albumentations transforms."""
         image_path, label_path = self.samples[idx]
         image = self._load_image(image_path)
         height, width = image.shape[1], image.shape[2]
@@ -79,6 +84,22 @@ class YoloDetectionDataset(Dataset):
                     boxes.append(box)
                     labels.append(cls + 1)
 
+        # Albumentations expects boxes as list of [x_min, y_min, x_max, y_max] and labels as list
+        if self.transforms is not None:
+            # Albumentations expects HWC numpy image
+            np_image = image.permute(1, 2, 0).cpu().numpy()  # CHW to HWC
+            # If no boxes, pass empty list
+            transformed = self.transforms(
+                image=np_image,
+                bboxes=boxes,
+                labels=labels
+            )
+            # Convert back to torch tensor (C, H, W)
+            image = transformed["image"]
+            boxes = transformed["bboxes"]
+            labels = transformed["labels"]
+
+        # Convert boxes and labels to tensors
         if boxes:
             boxes = torch.tensor(boxes, dtype=torch.float32)
             labels = torch.tensor(labels, dtype=torch.int64)
@@ -95,9 +116,6 @@ class YoloDetectionDataset(Dataset):
             "area": area,
             "iscrowd": torch.zeros((labels.shape[0],), dtype=torch.int64),
         }
-
-        if self.transforms is not None:
-            image, target = self.transforms(image, target)
 
         return image, target
 
@@ -155,7 +173,8 @@ def collate_fn(batch):
 
 def create_model(num_classes, pretrained=True):
     """Instantiate a Faster R-CNN model with the requested number of classes."""
-    model = fasterrcnn_resnet50_fpn_v2(weights="DEFAULT" if pretrained else None)
+    model = fasterrcnn_resnet50_fpn_v2(
+        weights="DEFAULT" if pretrained else None)
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     return model
@@ -175,7 +194,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=20)
         losses = sum(loss for loss in loss_dict.values())
         losses.backward()
         # Prevent exploding gradients when large tiles or boxes spike the loss.
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
         optimizer.step()
 
         for k, v in loss_dict.items():
@@ -184,7 +203,8 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=20)
         if step % print_freq == 0:
             avg = {k: running[k] / step for k in running}
             loss_str = ", ".join(f"{k}: {v:.4f}" for k, v in avg.items())
-            print(f"Epoch {epoch} | Step {step}/{len(data_loader)} | {loss_str}")
+            print(
+                f"Epoch {epoch} | Step {step}/{len(data_loader)} | {loss_str}")
 
 
 @torch.inference_mode()
@@ -208,6 +228,7 @@ def evaluate_loss(model, data_loader, device):
     if count == 0:
         return {}
     return {k: v / count for k, v in totals.items()}
+
 
 @torch.inference_mode()
 def evaluate_metrics(model, data_loader, device, iou_threshold=0.5):
@@ -260,7 +281,7 @@ def evaluate_metrics(model, data_loader, device, iou_threshold=0.5):
                 if len(pred_boxes) == 0:
                     FN += len(gt_boxes)
                     continue
-                
+
                 # convert gt_boxes to set for matching
                 gt_boxes = list(gt_boxes)
                 # sort predictions by scores in descending order
@@ -286,7 +307,8 @@ def evaluate_metrics(model, data_loader, device, iou_threshold=0.5):
     # calculate precision, recall, F1
     precision = TP/(TP + FP) if (TP + FP) > 0 else 0.0
     recall = TP/(TP + FN) if (TP + FN) > 0 else 0.0
-    F1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+    F1 = 2 * (precision * recall) / (precision +
+                                     recall) if (precision + recall) > 0 else 0.0
     # mAP calculation is simplified here; for single class, it's equivalent to precision
     mAP = precision
 
@@ -315,11 +337,13 @@ def load_dataset_paths(data_yaml):
     dataset_root = config.get("path", "")
     if dataset_root:
         dataset_root = resolve_path(base_dir, dataset_root)
-    train_images = resolve_path(dataset_root, config["train"]) if dataset_root else resolve_path(base_dir, config["train"])
+    train_images = resolve_path(
+        dataset_root, config["train"]) if dataset_root else resolve_path(base_dir, config["train"])
     val_key = config.get("val", None)
     val_images = None
     if val_key:
-        val_images = resolve_path(dataset_root, val_key) if dataset_root else resolve_path(base_dir, val_key)
+        val_images = resolve_path(
+            dataset_root, val_key) if dataset_root else resolve_path(base_dir, val_key)
     class_count = int(config["nc"])
     return train_images, val_images, class_count
 
@@ -352,14 +376,34 @@ def main(args):
 
     train_images, val_images, class_count = load_dataset_paths(args.data_yaml)
 
-    # Only add simple augmentation so the evaluation distribution remains clean.
-    train_transforms = RandomHorizontalFlip(probability=args.hflip) if args.hflip > 0 else None
+    # Use Albumentations for data augmentation, could keep box and label mapping consistent.
+    train_transforms = A.Compose([
+        A.RandomRotate90(),
+        A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=0.2),
+        A.Affine(scale=(0.8, 1.2), shear=(-5, 5),
+                 translate_percent=(0.0, 0.1), p=0.6),
+        A.OneOf([
+            A.GaussianBlur(blur_limit=(1, 3), p=0.4),
+            A.MotionBlur(blur_limit=3, p=0.2),
+            A.NoOp()
+        ], p=0.4),
+        A.RandomBrightnessContrast(
+            brightness_limit=0.02, contrast_limit=0.02, p=0.5),  # small
+        A.GaussNoise(p=0.4),
+        # custom: gain/offset jitter (implement as lambda if needed)
+        A.Normalize(mean=0.0, std=1.0, max_pixel_value=255.0),
+        ToTensorV2()
+    ], bbox_params=A.BboxParams(format='pascal_voc', label_fields=['labels']))
+
     val_transforms = None
 
-    train_dataset = YoloDetectionDataset(train_images, class_count, transforms=train_transforms)
+    train_dataset = YoloDetectionDataset(
+        train_images, class_count, transforms=train_transforms)
     val_dataset = None
     if val_images is not None and os.path.isdir(val_images):
-        val_dataset = YoloDetectionDataset(val_images, class_count, transforms=val_transforms)
+        val_dataset = YoloDetectionDataset(
+            val_images, class_count, transforms=val_transforms)
 
     train_loader = DataLoader(
         train_dataset,
@@ -389,7 +433,8 @@ def main(args):
     params = [p for p in model.parameters() if p.requires_grad]
     # wait decay, to prevent overfitting, L2 regularization
     optimizer = torch.optim.AdamW(params, lr=args.lr, weight_decay=1e-4)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_gamma)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer, step_size=args.lr_step, gamma=args.lr_gamma)
 
     # loss and metrics tracking
     loss_rows = []
@@ -397,22 +442,28 @@ def main(args):
 
     best_val = float("inf")
     for epoch in range(1, args.epochs + 1):
-        train_one_epoch(model, optimizer, train_loader, device, epoch, print_freq=args.print_freq)
+        train_one_epoch(model, optimizer, train_loader, device,
+                        epoch, print_freq=args.print_freq)
         lr_scheduler.step()
 
         if val_loader is not None:
             val_metrics = evaluate_loss(model, val_loader, device)
-            val_loss = sum(val_metrics.values()) if val_metrics else float("inf")
-            metrics_str = ", ".join(f"{k}: {v:.4f}" for k, v in val_metrics.items()) if val_metrics else "n/a"
-            print(f"Validation epoch {epoch}: total_loss={val_loss:.4f} | {metrics_str}")
-            
+            val_loss = sum(val_metrics.values()
+                           ) if val_metrics else float("inf")
+            metrics_str = ", ".join(
+                f"{k}: {v:.4f}" for k, v in val_metrics.items()) if val_metrics else "n/a"
+            print(
+                f"Validation epoch {epoch}: total_loss={val_loss:.4f} | {metrics_str}")
+
             row = {"epoch": epoch, "val_loss": val_loss}
             row.update({f"val_{k}": v for k, v in val_metrics.items()})
             loss_rows.append(row)
 
             obd_metrics = evaluate_metrics(model, val_loader, device)
-            obd_metrics_str = ", ".join(f"{k}: {v:.4f}" for k, v in obd_metrics.items()) if obd_metrics else "n/a"
-            print(f"Validation epoch {epoch} detection metrics: {obd_metrics_str}")
+            obd_metrics_str = ", ".join(
+                f"{k}: {v:.4f}" for k, v in obd_metrics.items()) if obd_metrics else "n/a"
+            print(
+                f"Validation epoch {epoch} detection metrics: {obd_metrics_str}")
             obd_row = {f"epoch": epoch}
             obd_row.update({f"val_{k}": v for k, v in obd_metrics.items()})
             metrics.append(obd_row)
@@ -465,22 +516,32 @@ def main(args):
         print(f"Saved detection metrics log: {csv_path}")
 
 
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train Faster R-CNN on YOLO-format datasets")
-    parser.add_argument("--data_yaml", type=str, default="faster_rcnn.yaml", help="Path to YOLO data.yaml")
-    parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
+    parser = argparse.ArgumentParser(
+        description="Train Faster R-CNN on YOLO-format datasets")
+    parser.add_argument("--data_yaml", type=str,
+                        default="faster_rcnn.yaml", help="Path to YOLO data.yaml")
+    parser.add_argument("--epochs", type=int, default=50,
+                        help="Number of training epochs")
     parser.add_argument("--batch", type=int, default=2, help="Batch size")
-    parser.add_argument("--lr", type=float, default=0.005, help="Initial learning rate")
-    parser.add_argument("--lr_step", type=int, default=15, help="LR scheduler step size")
-    parser.add_argument("--lr_gamma", type=float, default=0.1, help="LR scheduler gamma")
-    parser.add_argument("--workers", type=int, default=4, help="Dataloader worker processes")
-    parser.add_argument("--print_freq", type=int, default=20, help="Logging frequency per epoch")
-    parser.add_argument("--hflip", type=float, default=0.5, help="Horizontal flip probability for training")
-    parser.add_argument("--output_dir", type=str, default="runs/fasterrcnn", help="Directory to store checkpoints")
+    parser.add_argument("--lr", type=float, default=0.005,
+                        help="Initial learning rate")
+    parser.add_argument("--lr_step", type=int, default=15,
+                        help="LR scheduler step size")
+    parser.add_argument("--lr_gamma", type=float,
+                        default=0.1, help="LR scheduler gamma")
+    parser.add_argument("--workers", type=int, default=4,
+                        help="Dataloader worker processes")
+    parser.add_argument("--print_freq", type=int, default=20,
+                        help="Logging frequency per epoch")
+    parser.add_argument("--hflip", type=float, default=0.5,
+                        help="Horizontal flip probability for training")
+    parser.add_argument("--output_dir", type=str,
+                        default="runs/fasterrcnn", help="Directory to store checkpoints")
     parser.add_argument("--checkpoint_interval", type=int, default=10,
                         help="How often (in epochs) to write checkpoints")
-    parser.add_argument("--no_pretrained", action="store_true", help="Disable ImageNet-pretrained backbone")
+    parser.add_argument("--no_pretrained", action="store_true",
+                        help="Disable ImageNet-pretrained backbone")
     args = parser.parse_args()
 
     torch.manual_seed(0)
