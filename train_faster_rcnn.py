@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.transforms import functional as F
-
+import pandas as pd
 
 class YoloDetectionDataset(Dataset):
     """Dataset wrapper that reads YOLO-format labels and returns torchvision targets."""
@@ -244,6 +244,19 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
+    # check if output directory exists, if already exists, create new directory
+    if os.path.exists(args.output_dir):
+        base_output_dir = args.output_dir
+        suffix = 1
+        while True:
+            new_output_dir = f"{base_output_dir}_{suffix}"
+            if not os.path.exists(new_output_dir):
+                args.output_dir = new_output_dir
+                break
+            suffix += 1
+
+    loss_rows = []
+
     train_images, val_images, class_count = load_dataset_paths(args.data_yaml)
 
     # Only add simple augmentation so the evaluation distribution remains clean.
@@ -295,6 +308,10 @@ def main(args):
             val_loss = sum(val_metrics.values()) if val_metrics else float("inf")
             metrics_str = ", ".join(f"{k}: {v:.4f}" for k, v in val_metrics.items()) if val_metrics else "n/a"
             print(f"Validation epoch {epoch}: total_loss={val_loss:.4f} | {metrics_str}")
+            
+            row = {"epoch": epoch, "val_loss": val_loss}
+            row.update({f"val_{k}": v for k, v in val_metrics.items()})
+            loss_rows.append(row)
 
             if val_loss < best_val:
                 best_val = val_loss
@@ -329,6 +346,12 @@ def main(args):
         args.output_dir,
         "last_model.pt",
     )
+
+    if loss_rows:
+        df = pd.DataFrame(loss_rows)
+        csv_path = os.path.join(args.output_dir, "training_log.csv")
+        df.to_csv(csv_path, index=False)
+        print(f"Saved training log: {csv_path}")
 
 
 if __name__ == "__main__":
