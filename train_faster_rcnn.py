@@ -226,10 +226,12 @@ def evaluate_metrics(model, data_loader, device, iou_threshold=0.5):
             images = [img.to(device) for img in images]
             outputs = model(images)
 
-            for target, output in zip(targets, outputs):
+            # separate ground truth and predictions
+            for target in targets:
                 gt_boxes = target["boxes"].cpu().numpy()
                 all_gt_boxes.extend(gt_boxes)
 
+            for output in outputs:
                 pred_boxes = output["boxes"].cpu().numpy()
                 pred_scores = output["scores"].cpu().numpy()
                 pred_labels = output["labels"].cpu().numpy()
@@ -238,19 +240,58 @@ def evaluate_metrics(model, data_loader, device, iou_threshold=0.5):
                 all_pred_scores.extend(pred_scores)
                 all_pred_labels.extend(pred_labels)
 
+    # check if all the labels are zero (single class)
+    if not all(label == 1 for label in all_pred_labels):
+        raise NotImplementedError("This evaluation function currently supports only single-class detection.")
+    
+    # sort predictions by scores in descending order
+    sorted_indices = np.argsort(np.array(all_pred_scores), order='descending')
+    all_pred_boxes = [all_pred_boxes[i] for i in sorted_indices]
+    all_pred_scores = [all_pred_scores[i] for i in sorted_indices]
+    all_pred_labels = [all_pred_labels[i] for i in sorted_indices]
+
+
     # Compute metrics here (this is a placeholder; actual implementation may vary)
     matched_gt = set()
     TP = 0
     FP = 0
+
+    def iou(boxA, boxB):
+        xA = max(boxA[0], boxB[0])
+        yA = max(boxA[1], boxB[1])
+        xB = min(boxA[2], boxB[2])
+        yB = min(boxA[3], boxB[3])
+
+        interArea = max(0, xB - xA + 1) * max(0, yB - yA + 1)
+        boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
+        boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
+
+        iou = interArea / float(boxAArea + boxBArea - interArea)
+        return iou
+
     for pb in all_pred_boxes:
-        pass
+        ious = [iou(pb, gb) for gb in all_gt_boxes]
+        max_iou = max(ious) if ious else 0
+        if max_iou >= iou_threshold and ious.index(max_iou) not in matched_gt:
+            TP += 1
+            matched_gt.add(ious.index(max_iou))
+        else:
+            FP += 1
+    FN = len(all_gt_boxes) - len(matched_gt)
+
+    # calculate precision, recall, F1
+    precision = TP/(TP + FP) if (TP + FP) > 0 else 0.0
+    recall = TP/(TP + FN) if (TP + FN) > 0 else 0.0
+    F1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+    # mAP calculation is simplified here; for single class, it's equivalent to precision
+    mAP = precision
 
     # For simplicity, we will return dummy values
     metrics = {
-        "mAP": 0.0,
-        "precision": 0.0,
-        "recall": 0.0,
-        "F1": 0.0,
+        "mAP": mAP,
+        "precision": precision,
+        "recall": recall,
+        "F1": F1
     }
     return metrics
 
