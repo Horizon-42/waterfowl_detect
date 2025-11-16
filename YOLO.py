@@ -14,7 +14,17 @@ def train_yolo(data_yaml, model_path='yolov8n.pt', epochs=50, imgsz=640):
 
     model = YOLO(model_path)
     model.train(data=data_yaml, epochs=epochs, imgsz=imgsz,
-                device=device, batch=4)
+                device=device, batch=2, dropout = 0.5, plots = True,
+                hsv_h = 0.0,
+                hsv_s= 0.0,
+                hsv_v = 0.0,
+                degrees = 10.0,
+                translate = 0.1,
+                flipud = 0.5,
+                fliplr = 0.5,
+                mosaic= 0.5,
+                copy_paste = 0.2
+                )
     # move the best model to 'trained.pt'
 
     latest_run = get_last_run_directory()
@@ -79,7 +89,7 @@ if __name__ == "__main__":
 
     if mode == 'train':
         train_yolo(data_yaml, model_path=args.pretrained_model,
-                   epochs=350, imgsz=640)
+                   epochs=200, imgsz=800)
     elif mode == 'val':
         validate_yolo(model_path=model_path, imgsz=1024)
     else:

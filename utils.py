@@ -1,6 +1,8 @@
 import os
 import cv2
 import torch
+import numpy as np
+import pandas as pd
 
 def get_last_run_directory(base_dir='runs/detect'):
     import re
@@ -105,3 +107,89 @@ def predict_with_tiles(model, image_path, tile_size=640, overlap=0.2, imgsz=640,
     print(f"Result saved to {result_path}")
     return final_boxes, final_scores, final_class_ids
 
+def iou(boxA, boxB):
+    """
+    Compute Intersection over Union between two boxes, in continuous XYXY format.
+    """
+    # intersection
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
+
+    inter_w = max(0, xB - xA)
+    inter_h = max(0, yB - yA)
+    inter_area = inter_w * inter_h
+
+    areaA = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+    areaB = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+
+    union = areaA + areaB - inter_area
+    if union <= 0:
+        return 0.0
+    return inter_area / union
+
+def compute_metrics(predicted_boxes, confidence_scores, ground_truth_boxes, iou_threshold=0.5):
+    """
+    Only use for binay detection
+    """
+    TP = 0
+    FP = 0
+
+    # sort predicted boxes with confidence_scores
+    sorted_idxes = np.argsort(-np.array(confidence_scores))
+    predicted_boxes = [predicted_boxes[i] for i in sorted_idxes]
+    confidence_scores = [confidence_scores[i] for i in sorted_idxes]
+
+    matched_gt = set()
+    for pred_box in predicted_boxes:
+        matched_idx = -1
+        max_iou = iou_threshold
+        for gt_idx, gt_box in enumerate(ground_truth_boxes):
+            if gt_idx in matched_gt:
+                continue
+            iou_res = iou(pred_box, gt_box)
+            if iou_res >= max_iou:
+                matched_idx = gt_idx
+                max_iou = iou_res
+        if matched_idx >= 0:
+            TP += 1
+            matched_gt.add(matched_idx)
+        else:
+            FP += 1
+    FN = len(ground_truth_boxes) - len(matched_gt)
+
+    precision = TP / (TP + FP) if (TP + FP) > 0 else 0.0
+    recall = TP / (TP + FN) if (TP + FN) > 0 else 0.0
+    f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    return {'TP': TP, 'FP': FP, 'FN': FN, 'precision': precision, 'recall': recall, 'f1_score': f1_score}
+
+
+def read_test_annotations(annotation_path, input_size:tuple, traget_size:tuple):
+    """
+    Read test annotations from a CSV file.
+    The CSV file is expected to have columns: imageFilename,x(column),y(row),width,height
+    return boxes list in XYXY format
+    """
+    import pandas as pd
+    annotations = pd.read_csv(annotation_path)
+    boxes = []
+    src_h, src_w = input_size
+    dst_h, dst_w = traget_size
+    
+    pre_scale_x = src_w / dst_w
+    suppose_h = src_h / pre_scale_x
+    h_to_add = suppose_h - dst_h
+    scale = dst_w/src_w
+    
+    print("Original Size:", input_size)
+    print("Target Size:", traget_size)
+    print("Pre Scale X:", pre_scale_x)
+    print("Supposed Height:", suppose_h)
+    print("Height to add:", h_to_add)
+    for _, row in annotations.iterrows():
+        x1, y1, w, h = row["x(column)"], row["y(row)"], row["width"], row["height"]
+        x2, y2 = x1+w, y1+h
+        boxes.append((x1*scale, y1*scale, x2*scale, y2*scale))
+    return boxes
