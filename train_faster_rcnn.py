@@ -146,7 +146,6 @@ class YoloDetectionDataset(Dataset):
         return tensor.contiguous()
 
 
-
 def collate_fn(batch):
     """Custom collate function to keep images and targets in list form."""
     images, targets = zip(*batch)
@@ -372,14 +371,16 @@ def main(args):
         ], p=0.4),
         A.RandomBrightnessContrast(
             brightness_limit=0.02, contrast_limit=0.02, p=0.5),  # small
-        A.GaussNoise(p=0.4),
-        # custom: gain/offset jitter (implement as lambda if needed)
+        A.GaussNoise(mean_range=(0, 0.05), std_range=(0.05, 0.16), p=0.4),
+        # denoising step
         A.Normalize(mean=0.0, std=1.0, max_pixel_value=1.0),
         ToTensorV2()
     ], bbox_params=A.BboxParams(format='pascal_voc', label_fields=['labels']))
 
     val_transforms = A.Compose(
-        [A.Normalize(mean=0.0, std=1.0, max_pixel_value=1.0), ToTensorV2()]
+        [
+            A.Normalize(mean=0.0, std=1.0, max_pixel_value=1.0),
+            ToTensorV2()]
     )
 
     train_dataset = YoloDetectionDataset(
