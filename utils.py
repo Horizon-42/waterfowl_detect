@@ -198,6 +198,15 @@ def tile_images_with_labels(image, xxyy_boxes, tile_size=128, overlap=0.2):
         for x in range(0, width, stride):
             x_end = min(x + tile_size, width)
             y_end = min(y + tile_size, height)
+
+            # check if the tile is smaller than tile_size, if so, adjust the start position
+            if x_end - x < tile_size:
+                x = max(0, x_end - tile_size)
+            if y_end - y < tile_size:
+                y = max(0, y_end - tile_size)
+            x_end = min(x + tile_size, width)
+            y_end = min(y + tile_size, height)
+
             tile = image[y:y_end, x:x_end]
             tiled_images.append(tile)
 

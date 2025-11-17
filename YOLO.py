@@ -14,16 +14,13 @@ def train_yolo(data_yaml, model_path='yolov8n.pt', epochs=50, imgsz=640):
 
     model = YOLO(model_path)
     model.train(data=data_yaml, epochs=epochs, imgsz=imgsz,
-                device=device, batch=2, dropout = 0.5, plots = True,
-                hsv_h = 0.0,
-                hsv_s= 0.0,
-                hsv_v = 0.0,
+                device=device, batch=8, dropout = 0.5, plots = False,
                 degrees = 10.0,
                 translate = 0.1,
                 flipud = 0.5,
                 fliplr = 0.5,
                 mosaic= 0.5,
-                copy_paste = 0.2
+                copy_paste = 0.5
                 )
     # move the best model to 'trained.pt'
 
@@ -77,7 +74,7 @@ if __name__ == "__main__":
                         help='Mode to run: train, val, or test')
     parser.add_argument('--pretrained_model', type=str, required=False,
                         help='Path to pretrained model (default: yolo11x.pt)',
-                        default='yolo11x.pt')
+                        default='yolo11l.pt')
     parser.add_argument('--test_images', type=str, required=False,
                         help='Path to test images (required if mode is test)',
                         default="datasets/46k66mz9sz-2/00_UAV-derived Thermal Waterfowl Dataset/00_UAV-derived Waterfowl Thermal Imagery Dataset/01_Thermal Images and Ground Truth (used for detector training and testing)/03_Negative Images")
@@ -89,7 +86,7 @@ if __name__ == "__main__":
 
     if mode == 'train':
         train_yolo(data_yaml, model_path=args.pretrained_model,
-                   epochs=200, imgsz=800)
+                   epochs=100, imgsz=512)
     elif mode == 'val':
         validate_yolo(model_path=model_path, imgsz=1024)
     else:
