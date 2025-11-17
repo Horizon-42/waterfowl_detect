@@ -23,8 +23,8 @@ def load_model(model_type, model_path, num_classes=None, device='cpu'):
 if __name__ == "__main__":
     train_idx = 10
     model_path = f"runs/detect/train{train_idx}/weights/best.pt"
-    test_image_path = "datasets/test/test_image.tif"
-    label_path = "datasets/test/birds2.csv"
+    test_image_path = "datasets/test/val.tif"
+    label_path = "datasets/test/val.csv"
 
 
 

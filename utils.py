@@ -103,7 +103,7 @@ def predict_with_tiles(model, image_path, tile_size=640, overlap=0.2, imgsz=640,
     os.makedirs(result_dir, exist_ok=True)
     result_path = os.path.join(
         result_dir, 'result_' + os.path.basename(image_path))
-    cv2.imwrite(result_path, result_image)
+    cv2.imwrite(result_path.replace(".tif",".png"), result_image)
     print(f"Result saved to {result_path}")
     return final_boxes, final_scores, final_class_ids
 

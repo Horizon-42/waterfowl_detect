@@ -46,10 +46,11 @@ From this table, we can see:
 **Training Metrics**
 ![alt text](runs/detect/train10/results.png)
 **Performance**
-|Dataset|Box Precision|Recall|mAP50|mAP50-95|
-|---|---|---|---|---|
-|Validation|0.941|0.917|0.96|0.646|
-|Test||0.4840|0.5099|0.3821|
+|Dataset|Recall|mAP50|mAP50-95|
+|---|---|---|---|
+|Validation|0.917|0.96|0.646|
+|Test|0.4840|0.5099|0.3821|
+|Postive(Val)Image|0.9312|0.9682|0.8107
 
 ## Analysis 
 What are the strengths and weaknesses of thermal imagery for this task?
@@ -65,3 +66,5 @@ UAV-Based Thermal Imageries is took from far distance, so the targets we want to
 ## Visualization and Error Analysis
 ### Result on test orhomosaic image
 ![alt text](image.png)
+### Result on random validation image
+![alt text](results/for_val_images/result_val.png)
