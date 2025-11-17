@@ -1,1 +1,0 @@
-YOLO, 640, No Augment
