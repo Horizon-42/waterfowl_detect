@@ -165,6 +165,94 @@ def compute_metrics(predicted_boxes, confidence_scores, ground_truth_boxes, iou_
 
     return {'TP': TP, 'FP': FP, 'FN': FN, 'precision': precision, 'recall': recall, 'f1_score': f1_score}
 
+import numpy as np
+import pandas as pd
+
+def compute_iou_matrix(predicted_boxes, ground_truth_boxes):
+    """
+    Vectorized IoU for M predicted boxes × N GT boxes.
+    Returns an (M, N) IoU matrix.
+    """
+    if len(predicted_boxes) == 0 or len(ground_truth_boxes) == 0:
+        return np.zeros((len(predicted_boxes), len(ground_truth_boxes)))
+
+    pb = predicted_boxes[:, None, :]   # shape M×1×4
+    gt = ground_truth_boxes[None, :, :]  # shape 1×N×4
+
+    # Intersection
+    xA = np.maximum(pb[..., 0], gt[..., 0])
+    yA = np.maximum(pb[..., 1], gt[..., 1])
+    xB = np.minimum(pb[..., 2], gt[..., 2])
+    yB = np.minimum(pb[..., 3], gt[..., 3])
+
+    inter_w = np.maximum(xB - xA, 0)
+    inter_h = np.maximum(yB - yA, 0)
+    inter_area = inter_w * inter_h
+
+    # Areas
+    pred_area = (pb[..., 2] - pb[..., 0]) * (pb[..., 3] - pb[..., 1])
+    gt_area = (gt[..., 2] - gt[..., 0]) * (gt[..., 3] - gt[..., 1])
+
+    union = pred_area + gt_area - inter_area
+    return inter_area / np.maximum(union, 1e-9)
+
+
+def compute_metrics_multi_iou_fast(predicted_boxes, confidence_scores, ground_truth_boxes, iou_thresholds=[0.5]):
+
+    predicted_boxes = np.array(predicted_boxes)
+    ground_truth_boxes = np.array(ground_truth_boxes)
+    confidence_scores = np.array(confidence_scores)
+
+    # Sort by confidence descending
+    if len(confidence_scores) > 0:
+        sort_idx = np.argsort(-confidence_scores)
+        predicted_boxes = predicted_boxes[sort_idx]
+        confidence_scores = confidence_scores[sort_idx]
+
+    # Pre-compute IoU matrix: shape = (M_pred, N_gt)
+    iou_mat = compute_iou_matrix(predicted_boxes, ground_truth_boxes)
+
+    results = []
+
+    for thr in iou_thresholds:
+
+        TP = 0
+        matched_gt = np.zeros(len(ground_truth_boxes), dtype=bool)
+
+        # For each prediction, choose the best GT ≥ threshold
+        for i in range(len(predicted_boxes)):
+            # IoUs of this predicted box with all GTs
+            ious = iou_mat[i]
+
+            # ignore already-matched GTs
+            ious = np.where(matched_gt, -1.0, ious)
+
+            gt_idx = np.argmax(ious)
+            max_iou = ious[gt_idx]
+
+            if max_iou >= thr:
+                TP += 1
+                matched_gt[gt_idx] = True
+
+        FP = len(predicted_boxes) - TP
+        FN = len(ground_truth_boxes) - matched_gt.sum()
+
+        precision = TP / (TP + FP) if (TP + FP) > 0 else 0.0
+        recall    = TP / (TP + FN) if (TP + FN) > 0 else 0.0
+        f1        = 2*precision*recall / (precision+recall) if precision+recall > 0 else 0.0
+
+        results.append(dict(
+            iou_threshold = thr,
+            TP = int(TP),
+            FP = int(FP),
+            FN = int(FN),
+            precision = precision,
+            recall = recall,
+            f1_score = f1
+        ))
+
+    return pd.DataFrame(results)
+
 
 def read_test_annotations(annotation_path):
     """

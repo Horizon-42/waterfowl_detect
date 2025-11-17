@@ -2,8 +2,11 @@ from ultralytics import YOLO, RTDETR
 import torch
 import numpy as np
 import cv2
+import json
+import os
+import pandas as pd
 
-from utils import predict_with_tiles, compute_metrics, read_test_annotations
+from utils import predict_with_tiles, compute_metrics, read_test_annotations, compute_metrics_multi_iou_fast
 
 def load_model(model_type, model_path, num_classes=None, device='cpu'):
     if model_type == 'yolo':
@@ -18,9 +21,10 @@ def load_model(model_type, model_path, num_classes=None, device='cpu'):
     return model
 
 if __name__ == "__main__":
-    model_path = "runs/detect/train18/weights/best.pt"
+    train_idx = 10
+    model_path = f"runs/detect/train{train_idx}/weights/best.pt"
     test_image_path = "datasets/test/test_image.tif"
-    label_path = "datasets/test/birds1.csv"
+    label_path = "datasets/test/birds2.csv"
 
 
 
@@ -32,13 +36,19 @@ if __name__ == "__main__":
         x1, y1, x2, y2 = map(int, box)
         cv2.rectangle(image, (x1, y1), (x2, y2), (255, 0, 0), 1)
 
-    img_size = 640
 
-    model = load_model(model_type='rtdetr', model_path=model_path, device='cuda')
-    final_boxes, final_scores, final_class_ids = predict_with_tiles(model, test_image_path, tile_size=640,
-                                                                     overlap=0.2, imgsz=img_size, conf=0.25)
+    model = load_model(model_type='yolo', model_path=model_path, device='cuda')
+    final_boxes, final_scores, final_class_ids = predict_with_tiles(model, test_image_path, tile_size=128,
+                                                                     overlap=0.1, imgsz=512, conf=0.25)
+    
+    # save final boxes as csv
+    with open(f'detected_boxes{train_idx}.csv', 'w') as f:
+        f.write('x1,y1,x2,y2,score,class_id\n')
+        for box, score, class_id in zip(final_boxes, final_scores, final_class_ids):
+            x1, y1, x2, y2 = map(int, box)
+            f.write(f'{x1},{y1},{x2},{y2},{score},{class_id}\n')
 
-    metrics = compute_metrics(final_boxes, final_scores, ground_truth_boxes, iou_threshold=0.1)
-    print("Evaluation Metrics:")
-    for key, value in metrics.items():
-        print(f"{key}: {value:.4f}")
+    metrics:pd.DataFrame = compute_metrics_multi_iou_fast(final_boxes, final_scores, ground_truth_boxes, iou_thresholds=np.arange(0.25, 0.91, 0.05).round(2).tolist())
+
+    metrics.to_csv(f'metrics_{train_idx}.csv', index=False)
+    print(metrics)
