@@ -270,6 +270,23 @@ def read_test_annotations(annotation_path):
         boxes.append([x1, y1, x2, y2])
     return boxes
 
+def read_detected_annotations(annotation_path):
+    """
+    Read detected annotations from a CSV file.
+    The CSV file is expected to have columns: x1,y1,x2,y2,score
+    return boxes list in XYXY format
+    """
+    import pandas as pd
+    annotations = pd.read_csv(annotation_path)
+    boxes = []
+    scores = []
+   
+    for _, row in annotations.iterrows():
+        x1, y1, x2, y2, score = row["x1"], row["y1"], row["x2"], row["y2"], row["score"]
+        boxes.append([x1, y1, x2, y2])
+        scores.append(score)
+    return boxes, scores
+
 def tile_images_with_labels(image, xxyy_boxes, tile_size=128, overlap=0.2):
     height, width = image.shape[:2]
     stride = int(tile_size * (1 - overlap))
@@ -309,3 +326,142 @@ def tile_images_with_labels(image, xxyy_boxes, tile_size=128, overlap=0.2):
             tiled_boxes.append(boxes_in_tile)
     return tiled_images, tiled_boxes
 
+def get_tp_fp_fn_indices(predicted_boxes, confidence_scores, ground_truth_boxes, iou_threshold=0.5):
+    """
+    Based on greedy matching: predictions sorted by confidence.
+    Returns:
+        TP_pred_idx: indices of predicted boxes that matched a GT
+        FP_pred_idx: indices of predicted boxes that failed to match
+        FN_gt_idx: indices of GT boxes that were never matched
+    """
+
+    predicted_boxes = np.array(predicted_boxes)
+    ground_truth_boxes = np.array(ground_truth_boxes)
+    confidence_scores = np.array(confidence_scores)
+
+    # Sort predictions by confidence descending
+    if len(confidence_scores) > 0:
+        sort_idx = np.argsort(-confidence_scores)
+        predicted_boxes = predicted_boxes[sort_idx]
+        confidence_scores = confidence_scores[sort_idx]
+    else:
+        sort_idx = np.arange(len(predicted_boxes))
+
+    # Precompute IoU matrix
+    M = len(predicted_boxes)
+    N = len(ground_truth_boxes)
+
+    if M == 0 and N == 0:
+        return [], [], []
+
+    if M == 0:
+        return [], [], list(range(N))
+
+    if N == 0:
+        return [], list(range(M)), []
+
+    # Vectorized IoU computation
+    pb = predicted_boxes[:, None, :]  # M×1×4
+    gt = ground_truth_boxes[None, :, :]  # 1×N×4
+
+    xA = np.maximum(pb[..., 0], gt[..., 0])
+    yA = np.maximum(pb[..., 1], gt[..., 1])
+    xB = np.minimum(pb[..., 2], gt[..., 2])
+    yB = np.minimum(pb[..., 3], gt[..., 3])
+
+    inter = np.maximum(xB - xA, 0) * np.maximum(yB - yA, 0)
+
+    area_pred = (pb[..., 2] - pb[..., 0]) * (pb[..., 3] - pb[..., 1])
+    area_gt = (gt[..., 2] - gt[..., 0]) * (gt[..., 3] - gt[..., 1])
+
+    iou_mat = inter / np.maximum(area_pred + area_gt - inter, 1e-9)
+
+    # Matching arrays
+    matched_gt = np.zeros(N, dtype=bool)
+
+    TP_pred_idx = []
+    FP_pred_idx = []
+
+    for p in range(M):
+        ious = iou_mat[p]
+
+        # mask out GT boxes already matched
+        masked = np.where(matched_gt, -1.0, ious)
+        gt_idx = np.argmax(masked)
+        best_iou = masked[gt_idx]
+
+        if best_iou >= iou_threshold:
+            TP_pred_idx.append(p)
+            matched_gt[gt_idx] = True
+        else:
+            FP_pred_idx.append(p)
+
+    # FN = GT that were never matched
+    FN_gt_idx = np.where(~matched_gt)[0].tolist()
+
+    # Convert prediction indexes back to original order
+    # (optional — remove this if you prefer sorted order)
+    TP_pred_idx = sort_idx[TP_pred_idx].tolist()
+    FP_pred_idx = sort_idx[FP_pred_idx].tolist()
+
+    return TP_pred_idx, FP_pred_idx, FN_gt_idx
+
+def draw_tp_fp_fn(
+    image, 
+    predicted_boxes, 
+    confidence_scores, 
+    ground_truth_boxes, 
+    TP_pred_idx, 
+    FP_pred_idx, 
+    FN_gt_idx,
+    line_thickness=1
+):
+    """
+    Draw TP/FP/FN boxes:
+      TP: green + score
+      FP: red + score
+      FN: blue
+    """
+
+    img = image.copy()
+
+    # Color definitions (BGR)
+    GREEN = (0, 255, 0)
+    RED   = (0, 0, 255)
+    BLUE  = (255, 0, 0)
+
+    # ----------- Draw TP -----------
+    for p in TP_pred_idx:
+        box = predicted_boxes[p]
+        score = confidence_scores[p]
+
+        x1, y1, x2, y2 = map(int, box)
+        cv2.rectangle(img, (x1, y1), (x2, y2), GREEN, line_thickness)
+
+        label = f"{score:.2f}"
+        cv2.putText(img, label, (x1, y1 - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, GREEN, 1)
+
+    # ----------- Draw FP -----------
+    for p in FP_pred_idx:
+        box = predicted_boxes[p]
+        score = confidence_scores[p]
+
+        x1, y1, x2, y2 = map(int, box)
+        cv2.rectangle(img, (x1, y1), (x2, y2), RED, line_thickness)
+
+        label = f"{score:.2f}"
+        cv2.putText(img, label, (x1, y1 - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, RED, 1)
+
+    # ----------- Draw FN (GT boxes not matched) -----------
+    for g in FN_gt_idx:
+        box = ground_truth_boxes[g]
+
+        x1, y1, x2, y2 = map(int, box)
+        cv2.rectangle(img, (x1, y1), (x2, y2), BLUE, line_thickness)
+
+        cv2.putText(img, "FN", (x1, y1 - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, BLUE, 1)
+
+    return img

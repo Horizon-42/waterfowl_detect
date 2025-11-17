@@ -6,8 +6,8 @@ import json
 import os
 import pandas as pd
 
-from utils import predict_with_tiles, compute_metrics, read_test_annotations, compute_metrics_multi_iou_fast
-
+from utils import predict_with_tiles, compute_metrics, read_test_annotations, compute_metrics_multi_iou_fast, read_detected_annotations
+from utils import get_tp_fp_fn_indices, draw_tp_fp_fn
 def load_model(model_type, model_path, num_classes=None, device='cpu'):
     if model_type == 'yolo':
         model = YOLO(model_path)
@@ -20,14 +20,7 @@ def load_model(model_type, model_path, num_classes=None, device='cpu'):
     model.eval()
     return model
 
-if __name__ == "__main__":
-    train_idx = 10
-    model_path = f"runs/detect/train{train_idx}/weights/best.pt"
-    test_image_path = "datasets/test/val.tif"
-    label_path = "datasets/test/val.csv"
-
-
-
+def compute_metrics(train_idx:int, image_path:str, label_path:str):
     # draw the ground truth boxes on the test image and save it
     image = cv2.imread(test_image_path)
     ground_truth_boxes = read_test_annotations(label_path)
@@ -55,3 +48,35 @@ if __name__ == "__main__":
     # compute the mean precision
     mean_precision = metrics['precision'].mean()
     print(f"Mean Precision: {mean_precision:.4f}")
+
+def visualize_detections(image_path, detected_boxes_path:str, gt_boxes_path:str, output_path:str):
+    """
+    Visualize detections by drawing TP, FP, FN boxes on the image.
+    """
+    image = cv2.imread(image_path)
+    detected_boxes, scores = read_detected_annotations(detected_boxes_path)
+    gt_boxes = read_test_annotations(gt_boxes_path)
+
+    tp_ids, fp_ids, fn_ids = get_tp_fp_fn_indices(detected_boxes,scores, gt_boxes, iou_threshold=0.5)
+    image = draw_tp_fp_fn(image, detected_boxes, scores, gt_boxes, tp_ids, fp_ids, fn_ids)
+
+    cv2.imwrite(output_path, image)
+    print(f"Detections visualized and saved to {output_path}")
+
+if __name__ == "__main__":
+    train_idx = 10
+    model_path = f"runs/detect/train{train_idx}/weights/best.pt"
+    test_image_path = "datasets/test/val.tif"
+    label_path = "datasets/test/val.csv"
+
+    # compute metrics
+    # compute_metrics(train_idx, test_image_path, label_path)
+
+    # visualize detections
+    detected_boxes_path = f"results/for_val_images/detected_boxes10.csv"
+    output_path = f"results/for_val_images/result_val_{train_idx}.png"
+    visualize_detections(test_image_path, detected_boxes_path, label_path, output_path)
+
+
+
+    

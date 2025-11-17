@@ -68,3 +68,5 @@ UAV-Based Thermal Imageries is took from far distance, so the targets we want to
 ![alt text](image.png)
 ### Result on random validation image
 ![alt text](results/for_val_images/result_val.png)
+### Error Visulization
+![alt text](results/for_val_images/result_val_10.png)
