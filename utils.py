@@ -181,3 +181,34 @@ def read_test_annotations(annotation_path):
         x2, y2 = x1+w, y1+h
         boxes.append([x1, y1, x2, y2])
     return boxes
+
+def tile_images_with_labels(image, xxyy_boxes, tile_size=128, overlap=0.2):
+    height, width = image.shape[:2]
+    stride = int(tile_size * (1 - overlap))
+
+    tiled_images = []
+    tiled_boxes = []
+
+    def is_in_box(inner_box, border):
+        x1,y1,x2,y2 = inner_box
+        x,y,x_end,y_end = border
+        return x<=x1<=x_end and x<=x2<=x_end and y<=y1<=y_end and y<=y2<=y_end
+
+    for y in range(0, height, stride):
+        for x in range(0, width, stride):
+            x_end = min(x + tile_size, width)
+            y_end = min(y + tile_size, height)
+            tile = image[y:y_end, x:x_end]
+            tiled_images.append(tile)
+
+            # check all the xxyy_boxes, if it in the image, translate it
+            boxes_in_tile = []
+            for box in xxyy_boxes:
+                boarder_box = (x, y, x_end, y_end)
+                if is_in_box(box, boarder_box):
+                    x1, y1, x2, y2 = box
+                    translated_box = [x1 - x, y1 - y, x2 - x, y2 - y]
+                    boxes_in_tile.append(translated_box)
+            tiled_boxes.append(boxes_in_tile)
+    return tiled_images, tiled_boxes
+
