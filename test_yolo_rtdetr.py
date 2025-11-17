@@ -48,7 +48,10 @@ if __name__ == "__main__":
             x1, y1, x2, y2 = map(int, box)
             f.write(f'{x1},{y1},{x2},{y2},{score},{class_id}\n')
 
-    metrics:pd.DataFrame = compute_metrics_multi_iou_fast(final_boxes, final_scores, ground_truth_boxes, iou_thresholds=np.arange(0.25, 0.91, 0.05).round(2).tolist())
+    metrics:pd.DataFrame = compute_metrics_multi_iou_fast(final_boxes, final_scores, ground_truth_boxes, iou_thresholds=np.arange(0.25, 0.96, 0.05).round(2).tolist())
 
     metrics.to_csv(f'metrics_{train_idx}.csv', index=False)
     print(metrics)
+    # compute the mean precision
+    mean_precision = metrics['precision'].mean()
+    print(f"Mean Precision: {mean_precision:.4f}")
