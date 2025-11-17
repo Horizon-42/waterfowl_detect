@@ -2,23 +2,23 @@
 ## Training Pipline
 ### Dataset Setting
 - Training with both positive and negative samples
-- Train/Valid ration is 0.85/0.15
+- Train/Valid ratio is 0.85/0.15
 - Testing on practical orthomosaic images.
-**The dataset the link provide has a wrong groundtruth for the proactical test image, we need switch to version 3.**
+**The dataset the link provides has a wrong groundtruth for the practical test image, we need to switch to version 3.**
 To match the test groundtruth with training data, we need to enlarge the box from 5 pixels to 7 pixels.
 
-### Data Agument
+### Data Augment
 - **Split Original images with tile size 128, and train the model with size 512.**
-- Balance 
-- Random Flip: Filp in horizontal and vertical direction.
+- Balance postive and negative images with 1:1.2.
+- Random Flip: Flip in horizontal and vertical direction.
 - Copy Paste: Copy and paste objects to other images.
-- Mosaic
+- Mosaic, merge some samples randomly.
 
 ### Model
 We tried RTDETR and YOLO.
 
 ### Metrics
-Since it's binary classify, we use **Precision**, **Recall** and **F1 Score** with with IOU in [25%, 90%].
+Since it's binary classification, we use **Precision**, **Recall** and **F1 Score** with IOU in [25%, 90%].
 
 # Experiment
 ## Models Performance in IOU 25%
@@ -37,10 +37,10 @@ Since it's binary classify, we use **Precision**, **Recall** and **F1 Score** wi
 |yolo11m.pt|512|Yes|Yes|100|0.9432|0.8953|0.9186|
 
 From this table, we can see:
-- **RTDETR** model has better **recall** than yolo on original training dataset.
-- Traing with **large image size** can improve the precision. **More epochs** helps as well.
-- Apperate data augment also improve the **recall**.
-- Training on splited tile balanced dataset could improve the performance dramstically.
+ - **RTDETR** model has better **recall** than yolo on original training dataset.
+ - Training with **large image size** can improve the precision. **More epochs** helps as well.
+ - Appropriate data augment also improves the **recall**.
+ - Training on **splited and balanced** dataset could improve the performance dramatically.
 
 ## Best Model Metrics
 **Training Metrics**
@@ -62,11 +62,12 @@ Comparing to **RGB**, it captures creatures with body heat, distinguish them fro
 </p>
 
 ### The Weaknesses
-UAV-Based Thermal Imageries is took from far distance, so the targets we want to detect is very small in the images.
+UAV-Based Thermal Imageries are taken from far distance, so the targets we want to detect are very small in the images.
 ## Visualization and Error Analysis
 ### Result on test orhomosaic image
+### Result on test orthomosaic image
 ![alt text](image.png)
 ### Result on random validation image
 ![alt text](results/for_val_images/result_val.png)
-### Error Visulization
+### Error Visualization
 ![alt text](results/for_val_images/result_val_10.png)
