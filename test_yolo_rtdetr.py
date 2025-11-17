@@ -18,36 +18,25 @@ def load_model(model_type, model_path, num_classes=None, device='cpu'):
     return model
 
 if __name__ == "__main__":
-    model_path = "runs/detect/train3/weights/best.pt"
+    model_path = "runs/detect/train18/weights/best.pt"
     test_image_path = "datasets/test/test_image.tif"
-    label_path = "datasets/test/test_image_groundtruth.csv"
+    label_path = "datasets/test/birds1.csv"
 
 
 
     # draw the ground truth boxes on the test image and save it
-    src_image = cv2.imread("datasets/test/04_Detection Output.tiff")
     image = cv2.imread(test_image_path)
-
-    print(src_image.shape, image.shape)
-
-    ground_truth_boxes = read_test_annotations(label_path, src_image.shape[:2], image.shape[:2])
+    ground_truth_boxes = read_test_annotations(label_path)
 
     for box in ground_truth_boxes:
         x1, y1, x2, y2 = map(int, box)
         cv2.rectangle(image, (x1, y1), (x2, y2), (255, 0, 0), 1)
-    cv2.imwrite("ground_truth_boxes.png", image)
 
+    img_size = 640
 
-    exit(0)
-
-    model = load_model(model_type='rtdetr', model_path=model_path, device='cpu')
-    final_boxes, final_scores, final_class_ids = predict_with_tiles(model, test_image_path, tile_size=640, overlap=0.2, imgsz=640, conf=0.25)
-
-    # save final_boxes to csv
-    np.savetxt("predicted_boxes.csv", final_boxes, delimiter=",", fmt="%.2f")
-    # save ground_truth_boxes to csv
-    np.savetxt("ground_truth_boxes.csv", ground_truth_boxes, delimiter=",", fmt="%.2f")
-
+    model = load_model(model_type='rtdetr', model_path=model_path, device='cuda')
+    final_boxes, final_scores, final_class_ids = predict_with_tiles(model, test_image_path, tile_size=640,
+                                                                     overlap=0.2, imgsz=img_size, conf=0.25)
 
     metrics = compute_metrics(final_boxes, final_scores, ground_truth_boxes, iou_threshold=0.1)
     print("Evaluation Metrics:")

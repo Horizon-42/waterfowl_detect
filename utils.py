@@ -166,30 +166,18 @@ def compute_metrics(predicted_boxes, confidence_scores, ground_truth_boxes, iou_
     return {'TP': TP, 'FP': FP, 'FN': FN, 'precision': precision, 'recall': recall, 'f1_score': f1_score}
 
 
-def read_test_annotations(annotation_path, input_size:tuple, traget_size:tuple):
+def read_test_annotations(annotation_path):
     """
     Read test annotations from a CSV file.
-    The CSV file is expected to have columns: imageFilename,x(column),y(row),width,height
+    The CSV file is expected to have columns: x,y,w,h
     return boxes list in XYXY format
     """
     import pandas as pd
     annotations = pd.read_csv(annotation_path)
     boxes = []
-    src_h, src_w = input_size
-    dst_h, dst_w = traget_size
-    
-    pre_scale_x = src_w / dst_w
-    suppose_h = src_h / pre_scale_x
-    h_to_add = suppose_h - dst_h
-    scale = dst_w/src_w
-    
-    print("Original Size:", input_size)
-    print("Target Size:", traget_size)
-    print("Pre Scale X:", pre_scale_x)
-    print("Supposed Height:", suppose_h)
-    print("Height to add:", h_to_add)
+   
     for _, row in annotations.iterrows():
-        x1, y1, w, h = row["x(column)"], row["y(row)"], row["width"], row["height"]
+        x1, y1, w, h = row["x"], row["y"], row["w"], row["h"]
         x2, y2 = x1+w, y1+h
-        boxes.append((x1*scale, y1*scale, x2*scale, y2*scale))
+        boxes.append([x1, y1, x2, y2])
     return boxes
