@@ -35,3 +35,5 @@ What are the strengths and weaknesses of thermal imagery for this task?
 Comparing to **RGB**, it captures creatures with body heat, distinguish them from low temperature background objects like grass.
 ### The Weaknesses
 UAV-Based Thermal Imageries is took from far distance, so the targets we want to detect is very small in the images. We need to do upsampling to training a model with better precision and recall.
+
+## Visualization and Error Analysis
