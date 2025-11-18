@@ -43,7 +43,7 @@ L_{max} < 0 \implies d_{max}(a,p) - d_{min}(a,n)+m < 0 \\
 $$
 if m is a large number, but formula (1) still holds, that means:
 1. The data separability is larger than we assume, model can easily find a embedding space that no hard or semi-hard triplets to be found. 
-2. If the training process didn't implement L2-Normalization for embedding vectors distance compute, in that situation, model can find a direction that $d_min(a, n) > d_max(a, p), and scale the vector, to make the magnitude of $d_min(a, n)-d_max(a, p)>m$.
+2. If the training process didn't implement L2-Normalization for embedding vectors distance compute, in that situation, model can find a direction that $d_{min}(a, n) > d_{max}(a, p)$, and scale the vector, to make the magnitude of $d_{min}(a, n)-d_{max}(a, p)>m$.
 
 For the second case:
 $$
