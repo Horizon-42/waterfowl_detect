@@ -1,38 +1,40 @@
 # Theoretical Deep Metric Learning
 ## Task 1
 ### 1.1
+>Show analytically how the choice of the margin 𝑚 affects the average inter-class distance in
+the embedding space.
+Derive the condition under which the expected loss 𝔼[ℒ] becomes zero, and interpret this
+condition.
+
 Loss Function:
 $$
 L = max(0, d(a, p) - d(a, n) + m)
 $$
 Distance inter class A and class B:
 $$
-d_{avg}(A, B) = \frac{1}{|A||B|}\sum_{x\in{A}, y\in{B}}d(x, y)
+d_{avg}(A, B) = \frac{1}{|A||B|}\sum_{a\in{A}, n\in{B}}d(a, n)
 $$
 Let 
 $$
 L' = d(a, p) - d(a, n) + m
 $$ 
-then
-$$
-d(a, n) = d(a, p) + m - L'
-$$
-Let
-$$
-a=x, p=x' \in A, n=y \in B
-$$
-we got
-$$
-d(x,y) = d(x, x') + m - L'
-$$
-we know $d(x, x') > 0$, and the training process try to reduce L' to 0, so if we set bigger m, we will get bigger inter-class distance.
 
-To make $\mathbb{E}{L} = 0$, we need $\mathbb{E}{L'}<=0$, that means for all triplets,
+To make $\mathbb{E}{L} = 0$, we need $\mathbb{E}{L'}<=0$
 $$
-d(a, p) - d(a, n) + m <= 0 \\
-\Rightarrow d(a, n) - d(a, p) >= m
+\mathbb{E}{L'} =\mathbb{E}[d(a, p)] - \mathbb{E}[d(a, n)] + m <= 0 \\
+\Rightarrow \mathbb{E}[d(a, n)] - \mathbb{E}[d(a, p)] >= m
 $$
+
+With big enough m, the training process will enlarge the inter-class distance $\mathbb{E}[d(a, n)]$, and reduce the inner-class distance $\mathbb{E}[d(a, p)]$.
+
 ### 1.2
+>Prove or formally justify under which circumstances a too large margin 𝑚 can lead to a
+situation where no triplets produce a positive loss (i.e., ℒ = 0 for all triplets) and the training
+stops.
+Also discuss the opposite case, in which the margin is so small that the loss remains positive
+for all triplets, preventing convergence.
+
+
 For the first case:
 $$
 L_{max} = max(0, d_{max}(a,p) - d_{min}(a,n)+m) \\
