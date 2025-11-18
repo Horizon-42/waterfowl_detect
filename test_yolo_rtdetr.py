@@ -22,7 +22,7 @@ def load_model(model_type, model_path, num_classes=None, device='cpu'):
 
 def compute_metrics(train_idx:int, image_path:str, label_path:str):
     # draw the ground truth boxes on the test image and save it
-    image = cv2.imread(test_image_path)
+    image = cv2.imread(image_path)
     ground_truth_boxes = read_test_annotations(label_path)
 
     for box in ground_truth_boxes:
@@ -31,7 +31,7 @@ def compute_metrics(train_idx:int, image_path:str, label_path:str):
 
 
     model = load_model(model_type='yolo', model_path=model_path, device='cuda')
-    final_boxes, final_scores, final_class_ids = predict_with_tiles(model, test_image_path, tile_size=128,
+    final_boxes, final_scores, final_class_ids = predict_with_tiles(model, image_path, tile_size=128,
                                                                      overlap=0.1, imgsz=512, conf=0.25)
     
     # save final boxes as csv
@@ -66,16 +66,27 @@ def visualize_detections(image_path, detected_boxes_path:str, gt_boxes_path:str,
 if __name__ == "__main__":
     train_idx = 10
     model_path = f"runs/detect/train{train_idx}/weights/best.pt"
-    test_image_path = "datasets/test/val.tif"
-    label_path = "datasets/test/val.csv"
+    # test_image_path = "datasets/test/val.tif"
+    # label_path = "datasets/test/val.csv"
+    compute_metrics(train_idx, "datasets/test/test_image.tif", "datasets/test/birds1.csv")
+
+
 
     # compute metrics
     # compute_metrics(train_idx, test_image_path, label_path)
 
     # visualize detections
-    detected_boxes_path = f"results/for_val_images/detected_boxes10.csv"
-    output_path = f"results/for_val_images/result_val_{train_idx}.png"
-    visualize_detections(test_image_path, detected_boxes_path, label_path, output_path)
+    # detected_boxes_path = f"results/for_val_images/detected_boxes10.csv"
+    # output_path = f"results/for_val_images/result_val_{train_idx}.png"
+    # visualize_detections(test_image_path, detected_boxes_path, label_path, output_path)
+
+    # draw ground truth boxes on test image
+    image = cv2.imread("datasets/test/test_image.tif")
+    ground_truth_boxes = read_test_annotations("datasets/test/birds1.csv")
+    for box in ground_truth_boxes:
+        x1, y1, x2, y2 = map(int, box)
+        cv2.rectangle(image, (x1, y1), (x2, y2), (255, 0, 0), 1)
+    cv2.imwrite("results/for_test_images/ground_truth.png", image)
 
 
 

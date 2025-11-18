@@ -265,8 +265,18 @@ def read_test_annotations(annotation_path):
     boxes = []
    
     for _, row in annotations.iterrows():
-        x1, y1, w, h = row["x"], row["y"], row["w"], row["h"]
-        x2, y2 = x1+w, y1+h
+        x, y, w, h = row["x"], row["y"], row["w"], row["h"]
+        # w+=2
+        # h+=2
+        # # x2, y2 = x1+w, y1+h
+        # x1 = x- w/2
+        # y1 = y - h/2
+        # x2 = x + w/2
+        # y2 = y + h/2
+        x1 = x-2
+        y1 = y-2
+        x2 = x + w
+        y2 = y + h
         boxes.append([x1, y1, x2, y2])
     return boxes
 
